@@ -1,6 +1,6 @@
 {
   "author": "Thermetrics",
   "appId": "6aa7e373ac7a491dd7f44f7a",
-  "version": "1.19.0",
-  "versionDescription": "5-Year Revenue Trajectory and Revenue by Category charts now sit side-by-side on the same row (shrunk from 260px to 190px tall) instead of stacked full-width."
+  "version": "1.20.0",
+  "versionDescription": "Added a status banner above the tabs: 'N LinkedIn posts due this week' and 'N upcoming conferences (next 30 days)', each clickable to jump straight to that tab. Muted/gray when there's nothing to flag, colored when there's something to act on. Built generically (StatusBanner component, a plain items[] list) so more callouts can be added later without restructuring."
 }

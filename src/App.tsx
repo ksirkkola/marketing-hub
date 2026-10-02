@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Flex, Heading, HStack, IconButton, Tab, TabList, TabPanel, TabPanels, Tabs, Text, Tooltip,
 } from '@chakra-ui/react';
@@ -6,13 +6,18 @@ import { Activity } from '@hailer/app-sdk';
 import { useApp } from './hailer/use-app';
 import { listAllPhases } from './hailer/list-all';
 import {
-  WorkflowIds, LinkedInPhaseIds, ConferencePhaseIds, YearlyGoalsPhaseIds,
-  QuarterlyPhaseIds, MonthlyFocusPhaseIds,
+  WorkflowIds, LinkedInFieldIds, LinkedInPhaseIds, ConferenceFieldIds, ConferencePhaseIds,
+  YearlyGoalsPhaseIds, QuarterlyPhaseIds, MonthlyFocusPhaseIds,
 } from './hailer/workspace-ids';
 import LinkedInBoard from './components/LinkedInBoard';
 import ConferenceBoard from './components/ConferenceBoard';
 import YearlyGoalsBoard from './components/YearlyGoalsBoard';
+import StatusBanner, { StatusBannerItem } from './components/StatusBanner';
 import { HailerRefresh } from './hailer/theme/icons/HailerRefresh';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TAB_LINKEDIN = 0;
+const TAB_CONFERENCES = 1;
 
 const LINKEDIN_PHASES = Object.values(LinkedInPhaseIds);
 const CONFERENCE_PHASES = Object.values(ConferencePhaseIds);
@@ -30,6 +35,7 @@ export default function App() {
   const [monthlyFocus, setMonthlyFocus] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [tabIndex, setTabIndex] = useState(0);
 
   const loadAll = useCallback(async () => {
     if (!hailer) return;
@@ -122,6 +128,38 @@ export default function App() {
     [createActivity],
   );
 
+  // Status banner signals — generic enough that adding a third/fourth callout later (more
+  // tabs, more things worth surfacing) is just another entry below, nothing structural.
+  const bannerItems: StatusBannerItem[] = useMemo(() => {
+    const now = Date.now();
+    const weekOut = now + 7 * DAY_MS;
+    const monthOut = now + 30 * DAY_MS;
+
+    const postsDueSoon = linkedInPosts.filter((a) => {
+      if (a.currentPhase !== LinkedInPhaseIds.scheduled) return false;
+      const scheduledDate = a.fields?.[LinkedInFieldIds.scheduledDate] as number | undefined;
+      return typeof scheduledDate === 'number' && scheduledDate <= weekOut;
+    }).length;
+
+    const upcomingConferences = conferences.filter((a) => {
+      if (a.currentPhase === ConferencePhaseIds.done || a.currentPhase === ConferencePhaseIds.cancelled) return false;
+      const range = a.fields?.[ConferenceFieldIds.conferenceDates] as { start?: number } | undefined;
+      const start = range?.start;
+      return typeof start === 'number' && start >= now && start <= monthOut;
+    }).length;
+
+    return [
+      {
+        icon: '📅', label: `LinkedIn post${postsDueSoon === 1 ? '' : 's'} due this week`,
+        count: postsDueSoon, color: 'orange', onClick: () => setTabIndex(TAB_LINKEDIN),
+      },
+      {
+        icon: '🎤', label: `upcoming conference${upcomingConferences === 1 ? '' : 's'} (next 30 days)`,
+        count: upcomingConferences, color: 'blue', onClick: () => setTabIndex(TAB_CONFERENCES),
+      },
+    ];
+  }, [linkedInPosts, conferences]);
+
   if (!inside) {
     return (
       <Box p={8}>
@@ -153,7 +191,9 @@ export default function App() {
         </HStack>
       </Flex>
 
-      <Tabs variant="hailer" isLazy>
+      {!loading && <StatusBanner items={bannerItems} />}
+
+      <Tabs variant="hailer" isLazy index={tabIndex} onChange={setTabIndex}>
         <TabList>
           <Tab>📅 LinkedIn Content Calendar</Tab>
           <Tab>🎤 Conference Tracking</Tab>
