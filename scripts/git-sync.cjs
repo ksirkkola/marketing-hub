@@ -4,11 +4,12 @@
  * drift from what's actually deployed. Stages + commits any pending changes (message built
  * from public/manifest.json's version + versionDescription) and pushes to origin.
  *
- * Why this exists: a sibling app's git repo (ksirkkola/my-pto) silently fell multiple
- * versions behind its live published bundle — nobody noticed until an edit was attempted
- * against the stale repo, which would have deleted working features on publish. This
- * script makes that class of bug structurally impossible: you cannot publish without the
- * current code landing in GitHub first.
+ * Why this exists: this app's git repo (ksirkkola/my-pto) silently fell multiple versions
+ * behind the live published bundle — the live app had a whole extra set of features (My
+ * Documents, Company Documents tabs) that were never committed anywhere. Nobody noticed
+ * until an edit was attempted against the stale repo, which would have deleted those
+ * features on publish. This script makes that class of bug structurally impossible: you
+ * cannot publish without the current code landing in GitHub first.
  *
  * Silently no-ops (exit 0) if this app isn't git-linked (no .git directory) or if there's
  * no GITHUB_TOKEN available — so it's safe to wire into every app's publish scripts
@@ -79,13 +80,21 @@ function main() {
   // can't linger in a file or leak via `git remote -v`.
   const branch = tryRun('git rev-parse --abbrev-ref HEAD') || 'main';
   const auth = Buffer.from(`x-access-token:${token}`).toString('base64');
+  // Redact both the raw token AND its base64 form — execSync errors echo the full failed
+  // command (including the auth header), so the base64 string must be scrubbed too, not
+  // just the raw github_pat_ pattern.
+  function redact(text) {
+    return String(text)
+      .split(auth).join('[REDACTED]')
+      .replace(/github_pat_[A-Za-z0-9_]+/g, '[REDACTED]');
+  }
   try {
     run(`git -c http.extraHeader="Authorization: Basic ${auth}" push origin ${branch}`);
     console.log(`[git-sync] Pushed to origin/${branch}.`);
   } catch (err) {
     console.error('[git-sync] Push FAILED — publish will continue, but GitHub is now out of sync again. '
       + 'Resolve this before the next edit.');
-    console.error(String(err.message || err).replace(/github_pat_[A-Za-z0-9_]+/g, '[REDACTED]'));
+    console.error(redact(err.message || err));
   }
 }
 
